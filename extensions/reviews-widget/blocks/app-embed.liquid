@@ -1,0 +1,87 @@
+{% comment %}
+  ============================================================
+  App Embed — Auto-injects star badge + review grid on every
+  product page. Merchant only needs to toggle this ONCE in
+  Theme Editor → App embeds → Reviews — no per-product config.
+  File: /extensions/reviews-widget/blocks/app-embed.liquid
+  ============================================================
+{% endcomment %}
+
+{%- if template contains 'product' -%}
+  {%- assign product_id    = product.id -%}
+  {%- assign shop_domain   = shop.permanent_domain -%}
+  {%- assign api_base      = block.settings.api_base | default: 'https://your-app.vercel.app' -%}
+  {%- assign badge_target  = block.settings.badge_target | default: '.product__title, .product-single__title, [data-product-title], h1.product-title, h1' -%}
+  {%- assign grid_target   = block.settings.grid_target  | default: '.product__description, .product-single__description, [data-product-description], main' -%}
+  {%- assign show_badge    = block.settings.show_badge -%}
+  {%- assign show_grid     = block.settings.show_grid -%}
+
+  <script>
+    window.__EVO_REVIEWS__ = {
+      shop: {{ shop_domain | json }},
+      productId: {{ product_id | json }},
+      apiBase: {{ api_base | json }},
+      badgeTarget: {{ badge_target | json }},
+      gridTarget: {{ grid_target | json }},
+      showBadge: {{ show_badge | json }},
+      showGrid: {{ show_grid | json }}
+    };
+  </script>
+
+  <script src="{{ 'app-embed.js' | asset_url }}" defer></script>
+  <link rel="stylesheet" href="{{ 'app-embed.css' | asset_url }}">
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "Reviews — Auto Display",
+  "target": "head",
+  "settings": [
+    {
+      "type": "header",
+      "content": "App configuration"
+    },
+    {
+      "type": "text",
+      "id": "api_base",
+      "label": "App API URL (Vercel)",
+      "default": "https://your-app.vercel.app",
+      "info": "Where your Reviews app is hosted."
+    },
+    {
+      "type": "header",
+      "content": "What to show"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_badge",
+      "label": "Show star badge under product title",
+      "default": true
+    },
+    {
+      "type": "checkbox",
+      "id": "show_grid",
+      "label": "Show full review grid at bottom of product",
+      "default": true
+    },
+    {
+      "type": "header",
+      "content": "Advanced placement (optional)"
+    },
+    {
+      "type": "text",
+      "id": "badge_target",
+      "label": "Where to inject the star badge",
+      "default": ".product__title, .product-single__title, [data-product-title], h1.product-title, h1",
+      "info": "CSS selector. The badge is inserted right after the first matching element."
+    },
+    {
+      "type": "text",
+      "id": "grid_target",
+      "label": "Where to inject the review grid",
+      "default": ".product__description, .product-single__description, [data-product-description], main",
+      "info": "CSS selector. The grid is appended after the first matching element."
+    }
+  ]
+}
+{% endschema %}

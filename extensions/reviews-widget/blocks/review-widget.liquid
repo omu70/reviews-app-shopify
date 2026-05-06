@@ -1,0 +1,444 @@
+{% comment %}
+  ============================================================
+  App Block 2 — Main Review Grid
+  File: /extensions/reviews-widget/blocks/review-widget.liquid
+  Placement: bottom of the product page.
+  ============================================================
+{% endcomment %}
+
+{%- assign product_id  = product.id | default: 'demo' -%}
+{%- assign shop_domain = shop.permanent_domain -%}
+{%- assign api_base    = block.settings.api_base | default: 'https://your-app.vercel.app' -%}
+
+<section
+  class="evo-rw"
+  data-evo-review-widget
+  data-shop="{{ shop_domain }}"
+  data-product-id="{{ product_id }}"
+  data-api="{{ api_base }}"
+  data-page="1"
+  data-limit="12"
+>
+  <!-- ============= Header ============= -->
+  <header class="evo-rw__header">
+    <div class="evo-rw__summary">
+      <div class="evo-rw__avg" data-evo-rw-avg>0.0</div>
+      <div class="evo-rw__sumright">
+        <div class="evo-rw__stars" data-evo-rw-stars>
+          <!-- star template, filled by JS -->
+        </div>
+        <div class="evo-rw__total" data-evo-rw-total>0 reviews</div>
+      </div>
+    </div>
+
+    <div class="evo-rw__actions">
+      <button class="evo-rw__btn" type="button" data-evo-write>Write a review</button>
+      <button class="evo-rw__icon-btn" type="button" aria-label="Filter reviews">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path d="M4 6h16M7 12h10M10 18h4" stroke="#111827" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <hr class="evo-rw__divider"/>
+
+  <!-- ============= Grid ============= -->
+  <div class="evo-rw__grid" data-evo-rw-grid>
+    <!-- review cards injected by JS -->
+  </div>
+
+  <!-- ============= Pagination ============= -->
+  <nav class="evo-rw__pager" data-evo-rw-pager aria-label="Reviews pagination"></nav>
+
+  <!-- ============= Write Review Modal ============= -->
+  <div class="evo-rw__modal" data-evo-modal hidden>
+    <div class="evo-rw__modal-card" role="dialog" aria-modal="true" aria-labelledby="evo-modal-title">
+      <button class="evo-rw__modal-close" type="button" data-evo-modal-close aria-label="Close">×</button>
+      <h3 id="evo-modal-title">Write a review</h3>
+      <form data-evo-form>
+        <label>Your name<input type="text" name="author_name" required maxlength="80"/></label>
+        <label>Rating
+          <select name="rating" required>
+            <option value="5">5 — Excellent</option>
+            <option value="4">4 — Good</option>
+            <option value="3">3 — Okay</option>
+            <option value="2">2 — Poor</option>
+            <option value="1">1 — Terrible</option>
+          </select>
+        </label>
+        <label>Review<textarea name="content" rows="4" required maxlength="4000"></textarea></label>
+        <button class="evo-rw__btn evo-rw__btn--primary" type="submit">Submit review</button>
+        <p class="evo-rw__form-msg" data-evo-form-msg></p>
+      </form>
+    </div>
+  </div>
+</section>
+
+<style>
+  .evo-rw{
+    font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+    color:#111827;
+    max-width:1200px;
+    margin:48px auto;
+    padding:0 16px;
+  }
+
+  /* ---------- Header ---------- */
+  .evo-rw__header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:16px;
+    flex-wrap:wrap;
+  }
+  .evo-rw__summary{ display:flex; align-items:center; gap:16px; }
+  .evo-rw__avg{
+    font-size:42px;
+    font-weight:800;
+    line-height:1;
+    color:#111827;
+  }
+  .evo-rw__sumright{ display:flex; flex-direction:column; gap:4px; }
+  .evo-rw__stars{ display:inline-flex; gap:2px; }
+  .evo-rw__stars svg{ width:20px; height:20px; }
+  .evo-rw__total{ font-size:13px; color:#6B7280; }
+
+  .evo-rw__actions{ display:flex; gap:10px; align-items:center; }
+  .evo-rw__btn{
+    background:#fff;
+    border:1.5px solid #111827;
+    color:#111827;
+    border-radius:8px;
+    padding:9px 16px;
+    font-weight:600;
+    font-size:14px;
+    cursor:pointer;
+    transition:transform .08s ease, background .15s ease;
+  }
+  .evo-rw__btn:hover{ background:#111827; color:#fff; }
+  .evo-rw__btn--primary{ background:#111827; color:#fff; }
+  .evo-rw__icon-btn{
+    width:38px; height:38px;
+    border:1.5px solid #111827;
+    background:#fff;
+    border-radius:8px;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer;
+  }
+  .evo-rw__icon-btn:hover{ background:#F3F4F6; }
+
+  .evo-rw__divider{
+    border:0;
+    border-top:1px solid #E5E7EB;
+    margin:18px 0 24px;
+  }
+
+  /* ---------- Grid ---------- */
+  .evo-rw__grid{
+    display:grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap:16px;
+  }
+  @media (max-width: 1024px){
+    .evo-rw__grid{ grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 600px){
+    .evo-rw__grid{ grid-template-columns: 1fr; }
+  }
+
+  /* ---------- Card ---------- */
+  .evo-rw__card{
+    background:#fff;
+    border:1px solid #E5E7EB;
+    border-radius:12px;
+    padding:16px;
+    box-shadow: 0 1px 2px rgba(17,24,39,.04), 0 1px 3px rgba(17,24,39,.04);
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+  }
+  .evo-rw__card-top{
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .evo-rw__card-stars{ display:inline-flex; gap:1px; }
+  .evo-rw__card-stars svg{ width:14px; height:14px; }
+  .evo-rw__card-date{ font-size:11.5px; color:#9CA3AF; }
+
+  .evo-rw__card-author{
+    display:flex; align-items:center; gap:10px;
+  }
+  .evo-rw__avatar{
+    width:36px; height:36px;
+    border-radius:50%;
+    background:#E5E7EB;
+    color:#374151;
+    font-weight:700;
+    font-size:13px;
+    display:inline-flex; align-items:center; justify-content:center;
+    flex-shrink:0;
+  }
+  .evo-rw__author-name{ font-weight:700; font-size:14px; color:#111827; }
+  .evo-rw__verified{
+    display:inline-flex; align-items:center; gap:4px;
+    font-size:11.5px; color:#374151;
+    margin-top:2px;
+  }
+  .evo-rw__verified svg{ width:12px; height:12px; }
+
+  .evo-rw__card-content{
+    font-size:13.5px;
+    line-height:1.5;
+    color:#374151;
+    margin:0;
+  }
+
+  /* ---------- Pagination ---------- */
+  .evo-rw__pager{
+    display:flex; justify-content:center; gap:6px;
+    margin-top:28px; flex-wrap:wrap;
+  }
+  .evo-rw__pager button{
+    min-width:36px; height:36px;
+    border-radius:8px;
+    border:1px solid #E5E7EB;
+    background:#fff;
+    color:#111827;
+    font-weight:600;
+    font-size:13px;
+    cursor:pointer;
+    padding:0 10px;
+  }
+  .evo-rw__pager button[aria-current="true"]{
+    background:#111827; color:#fff; border-color:#111827;
+  }
+  .evo-rw__pager button[disabled]{ opacity:.4; cursor:not-allowed; }
+
+  /* ---------- Empty / loading ---------- */
+  .evo-rw__empty{
+    grid-column: 1 / -1;
+    text-align:center; padding:32px;
+    color:#6B7280; font-size:14px;
+  }
+
+  /* ---------- Modal ---------- */
+  .evo-rw__modal{
+    position:fixed; inset:0; background:rgba(17,24,39,.55);
+    display:flex; align-items:center; justify-content:center;
+    z-index:9999;
+  }
+  .evo-rw__modal[hidden]{ display:none; }
+  .evo-rw__modal-card{
+    background:#fff; border-radius:14px; padding:24px;
+    width:min(440px, 92vw);
+    position:relative;
+    box-shadow:0 20px 40px rgba(0,0,0,.2);
+  }
+  .evo-rw__modal-card h3{ margin:0 0 14px; font-size:18px; }
+  .evo-rw__modal-card label{
+    display:block; font-size:13px; font-weight:600; margin-bottom:10px; color:#374151;
+  }
+  .evo-rw__modal-card input,
+  .evo-rw__modal-card select,
+  .evo-rw__modal-card textarea{
+    width:100%; margin-top:4px; padding:9px 12px;
+    border:1px solid #D1D5DB; border-radius:8px;
+    font:inherit; color:#111827; background:#fff;
+  }
+  .evo-rw__modal-close{
+    position:absolute; top:8px; right:12px;
+    width:30px; height:30px; border-radius:50%;
+    background:transparent; border:0; font-size:22px;
+    cursor:pointer; color:#6B7280;
+  }
+  .evo-rw__form-msg{ font-size:13px; margin-top:8px; min-height:18px; }
+</style>
+
+<script>
+  (function () {
+    var root = document.querySelector('[data-evo-review-widget]');
+    if (!root || root.__evoInit) return;
+    root.__evoInit = true;
+
+    var shop      = root.dataset.shop;
+    var productId = root.dataset.productId;
+    var apiBase   = (root.dataset.api || '').replace(/\/$/, '');
+    var limit     = parseInt(root.dataset.limit || '12', 10);
+
+    var grid    = root.querySelector('[data-evo-rw-grid]');
+    var pager   = root.querySelector('[data-evo-rw-pager]');
+    var avgEl   = root.querySelector('[data-evo-rw-avg]');
+    var totalEl = root.querySelector('[data-evo-rw-total]');
+    var starsEl = root.querySelector('[data-evo-rw-stars]');
+
+    // -------- Helpers --------
+    function star(filled){
+      var c = filled ? '#FFC107' : '#E5E7EB';
+      return '<svg viewBox="0 0 24 24" aria-hidden="true">' +
+        '<path d="M12 2.5l2.95 6.4 7.05.7-5.3 4.85 1.55 6.95L12 17.9l-6.25 3.5L7.3 14.45 2 9.6l7.05-.7L12 2.5z" fill="'+c+'"/>' +
+      '</svg>';
+    }
+    function starsHTML(rating){
+      var html = '';
+      for (var i=1; i<=5; i++) html += star(i <= Math.round(rating));
+      return html;
+    }
+    function timeAgo(iso){
+      var then = new Date(iso).getTime();
+      if (isNaN(then)) return '';
+      var s = Math.max(1, Math.floor((Date.now() - then)/1000));
+      var u = [['year',31536000],['month',2592000],['week',604800],
+               ['day',86400],['hour',3600],['minute',60]];
+      for (var i=0;i<u.length;i++){
+        var n = Math.floor(s/u[i][1]);
+        if (n >= 1) return n+' '+u[i][0]+(n>1?'s':'')+' ago';
+      }
+      return s+' seconds ago';
+    }
+    function escapeHTML(str){
+      return String(str || '').replace(/[&<>"']/g, function(c){
+        return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]);
+      });
+    }
+    function verifiedBadge(){
+      return '<span class="evo-rw__verified">'+
+        '<svg viewBox="0 0 24 24" aria-hidden="true">'+
+          '<path d="M9 16.2l-3.5-3.5-1.4 1.4L9 19l11-11-1.4-1.4z" fill="#374151"/>'+
+        '</svg>Verified purchase</span>';
+    }
+
+    function renderCards(reviews){
+      if (!reviews.length){
+        grid.innerHTML = '<div class="evo-rw__empty">No reviews yet — be the first!</div>';
+        return;
+      }
+      grid.innerHTML = reviews.map(function(r){
+        return '' +
+        '<article class="evo-rw__card">' +
+          '<div class="evo-rw__card-top">' +
+            '<div class="evo-rw__card-stars">'+ starsHTML(r.rating) +'</div>' +
+            '<div class="evo-rw__card-date">'+ timeAgo(r.created_at) +'</div>' +
+          '</div>' +
+          '<div class="evo-rw__card-author">' +
+            '<div class="evo-rw__avatar">'+ escapeHTML(r.author_initials || '??') +'</div>' +
+            '<div>' +
+              '<div class="evo-rw__author-name">'+ escapeHTML(r.author_name) +'</div>' +
+              (r.is_verified ? verifiedBadge() : '') +
+            '</div>' +
+          '</div>' +
+          '<p class="evo-rw__card-content">'+ escapeHTML(r.content) +'</p>' +
+        '</article>';
+      }).join('');
+    }
+
+    function renderPager(page, totalPages){
+      if (totalPages <= 1){ pager.innerHTML = ''; return; }
+      var html = '';
+      html += '<button data-page="'+(page-1)+'" '+(page<=1?'disabled':'')+'>Prev</button>';
+      var start = Math.max(1, page - 2);
+      var end   = Math.min(totalPages, start + 4);
+      start = Math.max(1, end - 4);
+      for (var i=start; i<=end; i++){
+        html += '<button data-page="'+i+'" '+(i===page?'aria-current="true"':'')+'>'+i+'</button>';
+      }
+      html += '<button data-page="'+(page+1)+'" '+(page>=totalPages?'disabled':'')+'>Next</button>';
+      pager.innerHTML = html;
+    }
+
+    function renderHeader(avg, total){
+      avgEl.textContent = (avg || 0).toFixed(1);
+      totalEl.textContent = (total || 0) + ' reviews';
+      starsEl.innerHTML = starsHTML(avg || 0);
+    }
+
+    function load(page){
+      if (!apiBase) return;
+      grid.innerHTML = '<div class="evo-rw__empty">Loading reviews…</div>';
+      var url = apiBase + '/api/reviews?shop='+encodeURIComponent(shop)
+              + '&productId='+encodeURIComponent(productId)
+              + '&page='+page+'&limit='+limit;
+      fetch(url).then(function(r){ return r.json(); }).then(function(d){
+        if (d.error){
+          grid.innerHTML = '<div class="evo-rw__empty">Could not load reviews.</div>';
+          return;
+        }
+        root.dataset.page = String(d.page);
+        renderHeader(d.average, d.totalRatings);
+        renderCards(d.reviews || []);
+        renderPager(d.page, d.totalPages);
+      }).catch(function(){
+        grid.innerHTML = '<div class="evo-rw__empty">Could not load reviews.</div>';
+      });
+    }
+
+    pager.addEventListener('click', function(e){
+      var btn = e.target.closest('button[data-page]');
+      if (!btn || btn.disabled) return;
+      var p = parseInt(btn.dataset.page, 10);
+      if (!isNaN(p) && p > 0) {
+        load(p);
+        root.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+
+    // -------- Modal: write a review --------
+    var modal     = root.querySelector('[data-evo-modal]');
+    var openBtn   = root.querySelector('[data-evo-write]');
+    var closeBtn  = root.querySelector('[data-evo-modal-close]');
+    var form      = root.querySelector('[data-evo-form]');
+    var formMsg   = root.querySelector('[data-evo-form-msg]');
+
+    function openModal(){ modal.hidden = false; }
+    function closeModal(){ modal.hidden = true; form.reset(); formMsg.textContent=''; }
+    openBtn.addEventListener('click', openModal);
+    closeBtn.addEventListener('click', closeModal);
+    modal.addEventListener('click', function(e){ if (e.target === modal) closeModal(); });
+
+    form.addEventListener('submit', function(e){
+      e.preventDefault();
+      formMsg.textContent = 'Submitting…';
+      var fd = new FormData(form);
+      var body = {
+        shop_domain: shop,
+        product_id: productId,
+        author_name: fd.get('author_name'),
+        rating: parseInt(fd.get('rating'), 10),
+        content: fd.get('content'),
+        is_verified: false
+      };
+      fetch(apiBase + '/api/reviews', {
+        method: 'POST',
+        headers: { 'Content-Type':'application/json' },
+        body: JSON.stringify(body)
+      })
+      .then(function(r){ return r.json().then(function(d){ return { ok:r.ok, d:d }; }); })
+      .then(function(res){
+        if (!res.ok){ formMsg.textContent = res.d.error || 'Could not submit.'; return; }
+        formMsg.textContent = 'Thanks! Your review is pending approval.';
+        setTimeout(closeModal, 1400);
+      })
+      .catch(function(){ formMsg.textContent = 'Network error.'; });
+    });
+
+    // initial fetch
+    load(1);
+  })();
+</script>
+
+{% schema %}
+{
+  "name": "Review Grid",
+  "target": "section",
+  "settings": [
+    {
+      "type": "text",
+      "id": "api_base",
+      "label": "App API base URL",
+      "default": "https://your-app.vercel.app",
+      "info": "Vercel URL where the Remix app is deployed."
+    }
+  ]
+}
+{% endschema %}

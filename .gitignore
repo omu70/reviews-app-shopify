@@ -1,0 +1,20 @@
+
+.cache
+.DS_Store
+.env
+.env.*
+.shopify.lock.env
+.shopify/*
+/.cache
+/app/build
+/app/public/build
+/build
+/extensions/*/dist
+/prisma/dev.sqlite
+/prisma/dev.sqlite-journal
+/public/_dev
+/public/build/
+# Ignore shopify files created during app dev
+build
+database.sqlite
+node_modules
