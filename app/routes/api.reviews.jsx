@@ -36,6 +36,7 @@ export const action = async ({ request }) => {
     shop_domain,
     product_id,
     author_name,
+    author_location,
     rating,
     content,
     is_verified = true,
@@ -58,6 +59,11 @@ export const action = async ({ request }) => {
     .slice(0, 2)
     .toUpperCase();
 
+  // Defensive: ensure shop row exists (in case install hook didn't run)
+  await supabaseAdmin
+    .from("shops")
+    .upsert({ shop_domain }, { onConflict: "shop_domain", ignoreDuplicates: true });
+
   const { data, error } = await supabaseAdmin
     .from("reviews")
     .insert({
@@ -65,6 +71,7 @@ export const action = async ({ request }) => {
       product_id: String(product_id),
       author_name: String(author_name).slice(0, 80),
       author_initials: initials || "AN",
+      author_location: author_location ? String(author_location).slice(0, 80) : null,
       is_verified: Boolean(is_verified),
       rating: ratingInt,
       content: String(content).slice(0, 4000),
@@ -91,36 +98,47 @@ export const loader = async ({ request }) => {
 
   const shop = url.searchParams.get("shop");
   const productId = url.searchParams.get("productId");
+  const productHandle = url.searchParams.get("productHandle");
+  const storeOnly = url.searchParams.get("store") === "true";
   const page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10));
   const limit = Math.min(50, Math.max(1, parseInt(url.searchParams.get("limit") || "12", 10)));
 
-  if (!shop || !productId) {
-    return respond({ error: "shop and productId are required" }, { status: 400 });
+  if (!shop) {
+    return respond({ error: "shop is required" }, { status: 400 });
+  }
+  if (!storeOnly && !productId && !productHandle) {
+    return respond({ error: "Provide productId, productHandle, or store=true" }, { status: 400 });
   }
 
   const from = (page - 1) * limit;
   const to = from + limit - 1;
 
-  // Paginated rows
-  const rowsP = supabaseAdmin
-    .from("reviews")
-    .select(
-      "id, author_name, author_initials, is_verified, rating, content, created_at",
-      { count: "exact" }
-    )
-    .eq("shop_domain", shop)
-    .eq("product_id", productId)
-    .eq("status", "approved")
+  // Helper that builds the base filter for either product- or store-scoped queries
+  function applyScope(query) {
+    query = query.eq("shop_domain", shop).eq("status", "approved");
+    if (storeOnly) {
+      query = query.is("product_id", null).is("product_handle", null);
+    } else if (productHandle) {
+      query = query.or(`product_id.eq.${productHandle},product_handle.eq.${productHandle}`);
+    } else {
+      query = query.eq("product_id", productId);
+    }
+    return query;
+  }
+
+  const rowsP = applyScope(
+    supabaseAdmin
+      .from("reviews")
+      .select(
+        "id, title, author_name, author_initials, author_location, author_country, is_verified, is_featured, rating, content, image_urls, video_url, reply, reply_at, created_at",
+        { count: "exact" }
+      )
+  )
+    .order("is_featured", { ascending: false })
     .order("created_at", { ascending: false })
     .range(from, to);
 
-  // Aggregate rating across ALL approved reviews for this product
-  const aggP = supabaseAdmin
-    .from("reviews")
-    .select("rating")
-    .eq("shop_domain", shop)
-    .eq("product_id", productId)
-    .eq("status", "approved");
+  const aggP = applyScope(supabaseAdmin.from("reviews").select("rating"));
 
   const [rowsRes, aggRes] = await Promise.all([rowsP, aggP]);
 

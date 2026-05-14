@@ -65,6 +65,12 @@ export const action = async ({ request }) => {
   const { session } = await authenticate.admin(request);
   const shop = session.shop;
 
+  // Make sure the shop row exists before inserting reviews
+  // (auth handler usually does this on install, but be defensive)
+  await supabaseAdmin
+    .from("shops")
+    .upsert({ shop_domain: shop }, { onConflict: "shop_domain", ignoreDuplicates: true });
+
   const form = await request.formData();
   const csvText = form.get("csv");
   if (!csvText || typeof csvText !== "string") {
