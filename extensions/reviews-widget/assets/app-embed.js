@@ -286,35 +286,42 @@
   // =====================================================
   // CARD BADGES — for collections, search, related, etc.
   // =====================================================
-  var CARD_SELECTORS = [
-    ".product-card", ".card-product", ".product-item", ".grid-product",
-    ".product__card", ".grid__item", ".collection-product",
-    "[class*='product-card']", "[class*='card-product']",
-    "[class*='product-grid-item']",
-    "li.grid__item", "li[class*='product']",
-    "article[class*='product']"
+  var TITLE_SELECTORS = [
+    "h1","h2","h3","h4","h5","h6",
+    ".card__heading", ".card__title", ".card-title",
+    ".product-card__title", ".product-card-title", ".product__title",
+    ".product-title", ".grid-product__title",
+    "[class*='card-title']", "[class*='card__title']",
+    "[class*='product-title']", "[class*='product-card__title']",
+    "[class*='product__title']", "[class*='card__heading']"
   ].join(",");
 
-  function findCardForLink(link) {
-    // Prefer a known card ancestor
-    var card = link.closest && link.closest(CARD_SELECTORS);
-    if (card) return card;
-    // Fallback: walk up until LI/ARTICLE/section or grid cell
-    var n = link.parentElement;
-    for (var i = 0; i < 6 && n; i++) {
-      var t = (n.tagName || "").toLowerCase();
-      if (t === "li" || t === "article" || /(grid|item|card)/i.test(n.className || "")) return n;
+  function getLinkHandle(link) {
+    if (!link) return null;
+    var m = (link.getAttribute("href") || "").match(/\/products\/([^/?#]+)/);
+    return m ? m[1] : null;
+  }
+
+  // For a given title element, find the product handle in nearest ancestor (up to 5 levels)
+  function findHandleForTitle(titleEl) {
+    // 1. Link inside the title itself
+    var inside = titleEl.querySelector && titleEl.querySelector('a[href*="/products/"]');
+    var handle = getLinkHandle(inside);
+    if (handle) return handle;
+    // 2. The title might BE an anchor
+    if (titleEl.tagName === "A") {
+      handle = getLinkHandle(titleEl);
+      if (handle) return handle;
+    }
+    // 3. Walk up to 5 levels and look for a product link inside that ancestor
+    var n = titleEl.parentElement;
+    for (var i = 0; i < 5 && n; i++) {
+      var link = n.querySelector && n.querySelector('a[href*="/products/"]');
+      var h = getLinkHandle(link);
+      if (h) return h;
       n = n.parentElement;
     }
     return null;
-  }
-
-  function findTitleInCard(card) {
-    return (
-      card.querySelector("h2 a, h3 a, h4 a") ||
-      card.querySelector(".card__heading, .product-card__title, .product-card-title, .card__title, .product-title, .grid__product-title, [class*='product-title'], [class*='card-title'], [class*='card__title'], [class*='product-card__title']") ||
-      card.querySelector("h2, h3, h4, h5")
-    );
   }
 
   function buildCardBadgeHTML(avg, count) {
@@ -336,33 +343,34 @@
   function injectCardBadges() {
     if (cfg.showCardBadges === false) return;
 
-    // Build a map: card element -> handle (one badge per unique card)
-    var cardsByHandle = {};   // handle -> [card,card,...]
-    var seenCards = new WeakSet();
+    // Map: handle -> list of title elements to inject AFTER
+    var byHandle = {};
+    var seenTitles = new WeakSet();
 
-    var links = document.querySelectorAll('a[href*="/products/"]');
-    for (var i = 0; i < links.length; i++) {
-      var link = links[i];
-      var m = (link.getAttribute("href") || "").match(/\/products\/([^/?#]+)/);
-      if (!m) continue;
-      var handle = m[1];
-      if (isProductPage && handle === cfg.productHandle) continue;
+    var titles = document.querySelectorAll(TITLE_SELECTORS);
+    for (var i = 0; i < titles.length; i++) {
+      var t = titles[i];
+      if (seenTitles.has(t)) continue;
 
-      var card = findCardForLink(link);
-      if (!card) continue;
-      if (seenCards.has(card)) continue;
-      if (card.querySelector("[data-evo-card-badge]")) {
-        seenCards.add(card);
+      // Skip if a badge already exists directly after this title
+      var next = t.nextElementSibling;
+      if (next && next.getAttribute && next.getAttribute("data-evo-card-badge") !== null) {
+        seenTitles.add(t);
         continue;
       }
-      seenCards.add(card);
 
-      if (!cardsByHandle[handle]) cardsByHandle[handle] = [];
-      cardsByHandle[handle].push(card);
+      var handle = findHandleForTitle(t);
+      if (!handle) continue;
+      // Don't inject for the current product's own page title (the main badge handles that)
+      if (isProductPage && handle === cfg.productHandle) continue;
+
+      seenTitles.add(t);
+      if (!byHandle[handle]) byHandle[handle] = [];
+      byHandle[handle].push(t);
     }
 
-    // One API call per unique handle
-    Object.keys(cardsByHandle).forEach(function (handle) {
+    // One API call per unique handle, then inject after every matching title
+    Object.keys(byHandle).forEach(function (handle) {
       fetch(apiBase + "/api/reviews?shop=" + encodeURIComponent(cfg.shop) +
             "&productHandle=" + encodeURIComponent(handle) +
             "&page=1&limit=1")
@@ -371,18 +379,15 @@
           if (!d || !d.totalRatings) return;
           var avg = (d.average || 0).toFixed(1);
           var count = d.totalRatings;
-          cardsByHandle[handle].forEach(function (card) {
-            if (card.querySelector("[data-evo-card-badge]")) return;
-            var titleEl = findTitleInCard(card);
-            var ref = titleEl;
-            if (ref && ref.tagName === "A") ref = ref.parentElement || ref;
-            if (!ref) return; // No title — skip rather than placing in random spot
-
+          byHandle[handle].forEach(function (t) {
+            // Re-check no badge slipped in via MutationObserver race
+            var next = t.nextElementSibling;
+            if (next && next.getAttribute && next.getAttribute("data-evo-card-badge") !== null) return;
             var badge = document.createElement("div");
             badge.setAttribute("data-evo-card-badge", "");
             badge.className = "evo-card-badge";
             badge.innerHTML = buildCardBadgeHTML(avg, count);
-            ref.parentNode.insertBefore(badge, ref.nextSibling);
+            t.parentNode.insertBefore(badge, t.nextSibling);
           });
         })
         .catch(function () { /* silent */ });
