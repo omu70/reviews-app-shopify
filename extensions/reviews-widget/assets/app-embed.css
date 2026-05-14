@@ -3,6 +3,22 @@
    File: /extensions/reviews-widget/assets/app-embed.css
    ============================================================= */
 
+/* ===== Compact Card Badge (collections / search / related) ===== */
+.evo-card-badge{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+  font-size:13px;
+  line-height:1;
+  margin:6px 0 8px;
+  color:#374151;
+  white-space:nowrap;
+}
+.evo-card-badge__star{ display:inline-flex; }
+.evo-card-badge__avg{ font-weight:700; color:#111827; font-size:13px; }
+.evo-card-badge__count{ font-size:12px; color:#6B7280; font-weight:500; }
+
 /* ===== Star Badge ===== */
 .evo-star-badge{
   font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;

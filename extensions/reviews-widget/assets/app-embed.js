@@ -5,9 +5,10 @@
    ============================================================= */
 (function () {
   var cfg = window.__EVO_REVIEWS__;
-  if (!cfg || !cfg.productId || !cfg.apiBase) return;
+  if (!cfg || !cfg.apiBase) return;
 
   var apiBase = cfg.apiBase.replace(/\/$/, "");
+  var isProductPage = Boolean(cfg.productId && cfg.productHandle);
   // We prefer handle since CSV imports use handle; fall back to id.
   var productKey = cfg.productHandle || cfg.productId;
 
@@ -282,11 +283,117 @@
     load(1);
   }
 
+  // =====================================================
+  // CARD BADGES — for collections, search, related, etc.
+  // =====================================================
+  function injectCardBadges() {
+    if (cfg.showCardBadges === false) return;
+
+    // Find all product links anywhere on the page
+    var links = document.querySelectorAll('a[href*="/products/"]');
+    if (!links.length) return;
+
+    var processed = new WeakSet();
+    var byHandle = {};      // handle -> Array<card elements>
+
+    links.forEach(function (link) {
+      var m = (link.getAttribute("href") || "").match(/\/products\/([^/?#]+)/);
+      if (!m) return;
+      var handle = m[1];
+      // Skip if this is the current product's main badge already
+      if (isProductPage && handle === cfg.productHandle) return;
+
+      // Walk up to find the "card" container (limit to ~6 levels up)
+      var card = link;
+      for (var i = 0; i < 6 && card.parentElement; i++) {
+        var p = card.parentElement;
+        if (/product[_-]?card|card|grid__item|product-item|product__media|product-grid|collection-product|item/i.test(p.className || "")) {
+          card = p;
+          break;
+        }
+        card = p;
+      }
+      if (processed.has(card)) return;
+      processed.add(card);
+
+      if (!byHandle[handle]) byHandle[handle] = [];
+      byHandle[handle].push(card);
+    });
+
+    // Fetch ratings for each unique handle
+    Object.keys(byHandle).forEach(function (handle) {
+      fetch(apiBase + "/api/reviews?shop=" + encodeURIComponent(cfg.shop) +
+            "&productHandle=" + encodeURIComponent(handle) +
+            "&page=1&limit=1")
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (!d || !d.totalRatings || d.totalRatings === 0) return;
+          var avg = (d.average || 0).toFixed(1);
+          var count = d.totalRatings;
+          byHandle[handle].forEach(function (card) {
+            if (card.querySelector("[data-evo-card-badge]")) return;
+            // Choose anchor: title-like element, otherwise the link itself
+            var titleEl =
+              card.querySelector("h2 a, h3 a, h4 a, .card__title, .card__heading, .product-card__title, .product-card-title, .product__title, .product-title, .grid__product-title, [class*='product-title'], [class*='card-title'], [class*='card__title']") ||
+              card.querySelector("h2, h3, h4");
+            var badge = document.createElement("div");
+            badge.setAttribute("data-evo-card-badge", "");
+            badge.className = "evo-card-badge";
+            badge.innerHTML =
+              '<span class="evo-card-badge__star" aria-hidden="true">' +
+                '<svg viewBox="0 0 24 24" width="13" height="13">' +
+                  '<path d="M12 2.5l2.95 6.4 7.05.7-5.3 4.85 1.55 6.95L12 17.9l-6.25 3.5L7.3 14.45 2 9.6l7.05-.7L12 2.5z" fill="#FFC107"/>' +
+                '</svg>' +
+              '</span>' +
+              '<span class="evo-card-badge__avg">' + avg + '</span>' +
+              '<span class="evo-card-badge__count">(' + count + ')</span>';
+
+            if (titleEl) {
+              // Insert right after the title element (or its closest block parent)
+              var ref = titleEl;
+              if (ref.tagName === "A") ref = ref.parentElement;
+              ref.parentNode.insertBefore(badge, ref.nextSibling);
+            } else {
+              card.appendChild(badge);
+            }
+          });
+        })
+        .catch(function () { /* silent */ });
+    });
+  }
+
   // ---------- Run after DOM ready ----------
-  function init() { try { injectBadge(); } catch(e){} try { injectGrid(); } catch(e){} }
+  function init() {
+    if (isProductPage) {
+      try { injectBadge(); } catch(e){}
+      try { injectGrid();  } catch(e){}
+    }
+    try { injectCardBadges(); } catch(e){}
+  }
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", init);
   } else {
     init();
   }
+
+  // Re-run card badges when AJAX-loaded collection grids change (some themes)
+  var observer = new MutationObserver(function (muts) {
+    var changed = false;
+    muts.forEach(function (m) {
+      if (m.addedNodes && m.addedNodes.length) {
+        for (var i = 0; i < m.addedNodes.length; i++) {
+          var n = m.addedNodes[i];
+          if (n.nodeType === 1 && (n.querySelector && n.querySelector('a[href*="/products/"]'))) {
+            changed = true; break;
+          }
+        }
+      }
+    });
+    if (changed) {
+      try { injectCardBadges(); } catch(e){}
+    }
+  });
+  try {
+    observer.observe(document.body, { childList: true, subtree: true });
+  } catch(e){}
 })();

@@ -1,89 +1,65 @@
 {% comment %}
   ============================================================
-  App Embed — Auto-injects star badge + review grid on every
-  product page. Merchant only needs to toggle this ONCE in
-  Theme Editor → App embeds → Reviews — no per-product config.
+  App Embed — Auto-injects:
+    1) Star badge under product title (product pages)
+    2) Review grid at bottom (product pages)
+    3) Compact star badges on every product card (collection,
+       search, related, homepage product grids, etc.)
   File: /extensions/reviews-widget/blocks/app-embed.liquid
   ============================================================
 {% endcomment %}
 
-{%- if template contains 'product' -%}
-  {%- assign product_id     = product.id -%}
-  {%- assign product_handle = product.handle -%}
-  {%- assign shop_domain    = shop.permanent_domain -%}
-  {%- assign api_base      = block.settings.api_base | default: 'https://reviews-app-shopify.vercel.app' -%}
-  {%- assign badge_target  = block.settings.badge_target | default: '.product__title, .product-single__title, [data-product-title], h1.product-title, h1' -%}
-  {%- assign grid_target   = block.settings.grid_target  | default: '.product__description, .product-single__description, [data-product-description], main' -%}
-  {%- assign show_badge    = block.settings.show_badge -%}
-  {%- assign show_grid     = block.settings.show_grid -%}
+{%- assign shop_domain    = shop.permanent_domain -%}
+{%- assign api_base       = block.settings.api_base | default: 'https://reviews-app-shopify.vercel.app' -%}
+{%- assign badge_target   = block.settings.badge_target | default: '.product__title, .product-single__title, [data-product-title], h1.product-title, h1' -%}
+{%- assign grid_target    = block.settings.grid_target  | default: '.product__description, .product-single__description, [data-product-description], main' -%}
+{%- assign show_badge     = block.settings.show_badge -%}
+{%- assign show_grid      = block.settings.show_grid -%}
+{%- assign show_card_badges = block.settings.show_card_badges -%}
 
-  <script>
-    window.__EVO_REVIEWS__ = {
-      shop: {{ shop_domain | json }},
-      productId: {{ product_id | json }},
-      productHandle: {{ product_handle | json }},
-      apiBase: {{ api_base | json }},
-      badgeTarget: {{ badge_target | json }},
-      gridTarget: {{ grid_target | json }},
-      showBadge: {{ show_badge | json }},
-      showGrid: {{ show_grid | json }}
-    };
-  </script>
+<script>
+  window.__EVO_REVIEWS__ = {
+    shop:           {{ shop_domain | json }},
+    productId:      {% if product %}{{ product.id | json }}{% else %}null{% endif %},
+    productHandle:  {% if product %}{{ product.handle | json }}{% else %}null{% endif %},
+    apiBase:        {{ api_base | json }},
+    badgeTarget:    {{ badge_target | json }},
+    gridTarget:     {{ grid_target | json }},
+    showBadge:      {{ show_badge | json }},
+    showGrid:       {{ show_grid | json }},
+    showCardBadges: {{ show_card_badges | json }}
+  };
+</script>
 
-  <script src="{{ 'app-embed.js' | asset_url }}" defer></script>
-  <link rel="stylesheet" href="{{ 'app-embed.css' | asset_url }}">
-{%- endif -%}
+<script src="{{ 'app-embed.js' | asset_url }}" defer></script>
+<link rel="stylesheet" href="{{ 'app-embed.css' | asset_url }}">
 
 {% schema %}
 {
   "name": "Reviews — Auto Display",
   "target": "head",
   "settings": [
-    {
-      "type": "header",
-      "content": "App configuration"
-    },
-    {
-      "type": "text",
-      "id": "api_base",
-      "label": "App API URL (Vercel)",
+    { "type": "header", "content": "App configuration" },
+    { "type": "text", "id": "api_base", "label": "App API URL (Vercel)",
       "default": "https://reviews-app-shopify.vercel.app",
-      "info": "Where your Reviews app is hosted."
-    },
-    {
-      "type": "header",
-      "content": "What to show"
-    },
-    {
-      "type": "checkbox",
-      "id": "show_badge",
-      "label": "Show star badge under product title",
-      "default": true
-    },
-    {
-      "type": "checkbox",
-      "id": "show_grid",
-      "label": "Show full review grid at bottom of product",
-      "default": true
-    },
-    {
-      "type": "header",
-      "content": "Advanced placement (optional)"
-    },
-    {
-      "type": "text",
-      "id": "badge_target",
-      "label": "Where to inject the star badge",
+      "info": "Where your Reviews app is hosted." },
+
+    { "type": "header", "content": "Product page widgets" },
+    { "type": "checkbox", "id": "show_badge", "label": "Show star badge under product title", "default": true },
+    { "type": "checkbox", "id": "show_grid", "label": "Show full review grid at bottom of product", "default": true },
+
+    { "type": "header", "content": "Listing/collection cards" },
+    { "type": "checkbox", "id": "show_card_badges",
+      "label": "Show star rating on every product card (collections, search, related)",
+      "default": true },
+
+    { "type": "header", "content": "Advanced placement (optional)" },
+    { "type": "text", "id": "badge_target", "label": "Where to inject the star badge",
       "default": ".product__title, .product-single__title, [data-product-title], h1.product-title, h1",
-      "info": "CSS selector. The badge is inserted right after the first matching element."
-    },
-    {
-      "type": "text",
-      "id": "grid_target",
-      "label": "Where to inject the review grid",
+      "info": "CSS selector. The badge is inserted right after the first matching element." },
+    { "type": "text", "id": "grid_target", "label": "Where to inject the review grid",
       "default": ".product__description, .product-single__description, [data-product-description], main",
-      "info": "CSS selector. The grid is appended after the first matching element."
-    }
+      "info": "CSS selector. The grid is appended after the first matching element." }
   ]
 }
 {% endschema %}
