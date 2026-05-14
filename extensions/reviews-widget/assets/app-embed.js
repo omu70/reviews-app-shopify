@@ -340,36 +340,59 @@
       '<span class="evo-card-badge__count">(' + count + ' Reviews)</span>';
   }
 
+  function uniqueHandlesIn(el) {
+    var out = new Set();
+    var anchors = el.querySelectorAll('a[href*="/products/"]');
+    for (var i = 0; i < anchors.length; i++) {
+      var h = getLinkHandle(anchors[i]);
+      if (h) out.add(h);
+    }
+    return out;
+  }
+
+  // Walk up from a product link until we find the SMALLEST container that:
+  //   - Contains an <img>
+  //   - Contains links pointing to EXACTLY ONE product (this one)
+  // That's the product card. If we hit a container with multiple products, we
+  // went too far (we entered the grid) and stop.
+  function findStrictCard(link) {
+    var n = link.parentElement;
+    for (var depth = 0; depth < 6 && n; depth++) {
+      var handles = uniqueHandlesIn(n);
+      if (handles.size > 1) return null;        // we're in a grid, stop
+      var hasImg = n.querySelector("img") !== null;
+      if (hasImg && handles.size === 1) return n; // this is a product card
+      n = n.parentElement;
+    }
+    return null;
+  }
+
   function injectCardBadges() {
     if (cfg.showCardBadges === false) return;
 
-    // Map: handle -> list of title elements to inject AFTER
-    var byHandle = {};
-    var seenTitles = new WeakSet();
+    var seenCards = new WeakSet();
+    var byHandle = {};  // handle -> [card,card,...]
 
-    var titles = document.querySelectorAll(TITLE_SELECTORS);
-    for (var i = 0; i < titles.length; i++) {
-      var t = titles[i];
-      if (seenTitles.has(t)) continue;
-
-      // Skip if a badge already exists directly after this title
-      var next = t.nextElementSibling;
-      if (next && next.getAttribute && next.getAttribute("data-evo-card-badge") !== null) {
-        seenTitles.add(t);
-        continue;
-      }
-
-      var handle = findHandleForTitle(t);
+    var links = document.querySelectorAll('a[href*="/products/"]');
+    for (var i = 0; i < links.length; i++) {
+      var link = links[i];
+      var handle = getLinkHandle(link);
       if (!handle) continue;
-      // Don't inject for the current product's own page title (the main badge handles that)
       if (isProductPage && handle === cfg.productHandle) continue;
 
-      seenTitles.add(t);
+      var card = findStrictCard(link);
+      if (!card) continue;
+      if (seenCards.has(card)) continue;
+      if (card.querySelector("[data-evo-card-badge]")) {
+        seenCards.add(card);
+        continue;
+      }
+      seenCards.add(card);
+
       if (!byHandle[handle]) byHandle[handle] = [];
-      byHandle[handle].push(t);
+      byHandle[handle].push(card);
     }
 
-    // One API call per unique handle, then inject after every matching title
     Object.keys(byHandle).forEach(function (handle) {
       fetch(apiBase + "/api/reviews?shop=" + encodeURIComponent(cfg.shop) +
             "&productHandle=" + encodeURIComponent(handle) +
@@ -379,15 +402,26 @@
           if (!d || !d.totalRatings) return;
           var avg = (d.average || 0).toFixed(1);
           var count = d.totalRatings;
-          byHandle[handle].forEach(function (t) {
-            // Re-check no badge slipped in via MutationObserver race
-            var next = t.nextElementSibling;
-            if (next && next.getAttribute && next.getAttribute("data-evo-card-badge") !== null) return;
+          byHandle[handle].forEach(function (card) {
+            if (card.querySelector("[data-evo-card-badge]")) return;
+            // Find the title within the card
+            var title =
+              card.querySelector("h1, h2, h3, h4, h5, h6") ||
+              card.querySelector(TITLE_SELECTORS);
+            if (!title) {
+              // Fallback: any text-bearing product link
+              var fb = card.querySelector('a[href*="/products/"]');
+              if (fb && (fb.textContent || "").trim()) title = fb;
+            }
+            if (!title) return;
+
+            var ref = title;
+            if (ref.tagName === "A") ref = ref.parentElement || ref;
             var badge = document.createElement("div");
             badge.setAttribute("data-evo-card-badge", "");
             badge.className = "evo-card-badge";
             badge.innerHTML = buildCardBadgeHTML(avg, count);
-            t.parentNode.insertBefore(badge, t.nextSibling);
+            ref.parentNode.insertBefore(badge, ref.nextSibling);
           });
         })
         .catch(function () { /* silent */ });
