@@ -35,6 +35,7 @@ export const action = async ({ request }) => {
   const {
     shop_domain,
     product_id,
+    product_handle,
     author_name,
     author_location,
     rating,
@@ -42,8 +43,11 @@ export const action = async ({ request }) => {
     is_verified = true,
   } = body || {};
 
-  if (!shop_domain || !product_id || !author_name || !rating || !content) {
+  if (!shop_domain || !author_name || !rating || !content) {
     return respond({ error: "Missing required fields" }, { status: 400 });
+  }
+  if (!product_id && !product_handle) {
+    return respond({ error: "Missing product_id or product_handle" }, { status: 400 });
   }
 
   const ratingInt = parseInt(rating, 10);
@@ -68,7 +72,8 @@ export const action = async ({ request }) => {
     .from("reviews")
     .insert({
       shop_domain,
-      product_id: String(product_id),
+      product_id: product_id ? String(product_id) : (product_handle ? String(product_handle) : null),
+      product_handle: product_handle ? String(product_handle) : null,
       author_name: String(author_name).slice(0, 80),
       author_initials: initials || "AN",
       author_location: author_location ? String(author_location).slice(0, 80) : null,

@@ -6,15 +6,17 @@
   ============================================================
 {% endcomment %}
 
-{%- assign product_id  = product.id | default: 'demo' -%}
-{%- assign shop_domain = shop.permanent_domain -%}
-{%- assign api_base    = block.settings.api_base | default: 'https://your-app.vercel.app' -%}
+{%- assign product_id     = product.id | default: 'demo' -%}
+{%- assign product_handle = product.handle | default: 'demo' -%}
+{%- assign shop_domain    = shop.permanent_domain -%}
+{%- assign api_base       = block.settings.api_base | default: 'https://reviews-app-shopify.vercel.app' -%}
 
 <section
   class="evo-rw"
   data-evo-review-widget
   data-shop="{{ shop_domain }}"
   data-product-id="{{ product_id }}"
+  data-product-handle="{{ product_handle }}"
   data-api="{{ api_base }}"
   data-page="1"
   data-limit="12"
@@ -262,10 +264,11 @@
     if (!root || root.__evoInit) return;
     root.__evoInit = true;
 
-    var shop      = root.dataset.shop;
-    var productId = root.dataset.productId;
-    var apiBase   = (root.dataset.api || '').replace(/\/$/, '');
-    var limit     = parseInt(root.dataset.limit || '12', 10);
+    var shop          = root.dataset.shop;
+    var productId     = root.dataset.productId;
+    var productHandle = root.dataset.productHandle;
+    var apiBase       = (root.dataset.api || '').replace(/\/$/, '');
+    var limit         = parseInt(root.dataset.limit || '12', 10);
 
     var grid    = root.querySelector('[data-evo-rw-grid]');
     var pager   = root.querySelector('[data-evo-rw-pager]');
@@ -357,7 +360,8 @@
       if (!apiBase) return;
       grid.innerHTML = '<div class="evo-rw__empty">Loading reviews…</div>';
       var url = apiBase + '/api/reviews?shop='+encodeURIComponent(shop)
-              + '&productId='+encodeURIComponent(productId)
+              + (productHandle ? '&productHandle='+encodeURIComponent(productHandle) : '')
+              + (productId ? '&productId='+encodeURIComponent(productId) : '')
               + '&page='+page+'&limit='+limit;
       fetch(url).then(function(r){ return r.json(); }).then(function(d){
         if (d.error){
@@ -403,7 +407,9 @@
       var body = {
         shop_domain: shop,
         product_id: productId,
+        product_handle: productHandle,
         author_name: fd.get('author_name'),
+        author_location: fd.get('author_location') || null,
         rating: parseInt(fd.get('rating'), 10),
         content: fd.get('content'),
         is_verified: false
@@ -436,7 +442,7 @@
       "type": "text",
       "id": "api_base",
       "label": "App API base URL",
-      "default": "https://your-app.vercel.app",
+      "default": "https://reviews-app-shopify.vercel.app",
       "info": "Vercel URL where the Remix app is deployed."
     }
   ]

@@ -7,14 +7,16 @@
 {% endcomment %}
 
 {%- assign product_id = product.id | default: 'demo' -%}
+{%- assign product_handle = product.handle | default: 'demo' -%}
 {%- assign shop_domain = shop.permanent_domain -%}
-{%- assign api_base = block.settings.api_base | default: 'https://your-app.vercel.app' -%}
+{%- assign api_base = block.settings.api_base | default: 'https://reviews-app-shopify.vercel.app' -%}
 
 <div
   class="evo-star-badge"
   data-evo-star-badge
   data-shop="{{ shop_domain }}"
   data-product-id="{{ product_id }}"
+  data-product-handle="{{ product_handle }}"
   data-api="{{ api_base }}"
 >
   <div class="evo-sb__row">
@@ -102,17 +104,19 @@
     if (!root || root.__evoInit) return;
     root.__evoInit = true;
 
-    var shop      = root.dataset.shop;
-    var productId = root.dataset.productId;
-    var apiBase   = (root.dataset.api || '').replace(/\/$/, '');
-    var avgEl     = root.querySelector('[data-evo-avg]');
-    var countEl   = root.querySelector('[data-evo-count]');
-    var viewersEl = root.querySelector('[data-evo-viewers]');
+    var shop          = root.dataset.shop;
+    var productId     = root.dataset.productId;
+    var productHandle = root.dataset.productHandle;
+    var apiBase       = (root.dataset.api || '').replace(/\/$/, '');
+    var avgEl         = root.querySelector('[data-evo-avg]');
+    var countEl       = root.querySelector('[data-evo-count]');
+    var viewersEl     = root.querySelector('[data-evo-viewers]');
 
     // ---- Live aggregate ----
-    if (apiBase && shop && productId) {
+    if (apiBase && shop && (productId || productHandle)) {
       fetch(apiBase + '/api/reviews?shop=' + encodeURIComponent(shop)
-           + '&productId=' + encodeURIComponent(productId)
+           + (productHandle ? '&productHandle=' + encodeURIComponent(productHandle) : '')
+           + (productId ? '&productId=' + encodeURIComponent(productId) : '')
            + '&page=1&limit=1')
         .then(function (r) { return r.json(); })
         .then(function (d) {
@@ -145,7 +149,7 @@
       "type": "text",
       "id": "api_base",
       "label": "App API base URL",
-      "default": "https://your-app.vercel.app",
+      "default": "https://reviews-app-shopify.vercel.app",
       "info": "The Vercel URL where the Remix app is deployed."
     }
   ]
