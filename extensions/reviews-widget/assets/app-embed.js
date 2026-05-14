@@ -286,76 +286,103 @@
   // =====================================================
   // CARD BADGES — for collections, search, related, etc.
   // =====================================================
+  var CARD_SELECTORS = [
+    ".product-card", ".card-product", ".product-item", ".grid-product",
+    ".product__card", ".grid__item", ".collection-product",
+    "[class*='product-card']", "[class*='card-product']",
+    "[class*='product-grid-item']",
+    "li.grid__item", "li[class*='product']",
+    "article[class*='product']"
+  ].join(",");
+
+  function findCardForLink(link) {
+    // Prefer a known card ancestor
+    var card = link.closest && link.closest(CARD_SELECTORS);
+    if (card) return card;
+    // Fallback: walk up until LI/ARTICLE/section or grid cell
+    var n = link.parentElement;
+    for (var i = 0; i < 6 && n; i++) {
+      var t = (n.tagName || "").toLowerCase();
+      if (t === "li" || t === "article" || /(grid|item|card)/i.test(n.className || "")) return n;
+      n = n.parentElement;
+    }
+    return null;
+  }
+
+  function findTitleInCard(card) {
+    return (
+      card.querySelector("h2 a, h3 a, h4 a") ||
+      card.querySelector(".card__heading, .product-card__title, .product-card-title, .card__title, .product-title, .grid__product-title, [class*='product-title'], [class*='card-title'], [class*='card__title'], [class*='product-card__title']") ||
+      card.querySelector("h2, h3, h4, h5")
+    );
+  }
+
+  function buildCardBadgeHTML(avg, count) {
+    return '' +
+      '<span class="evo-card-badge__star" aria-hidden="true">' +
+        '<svg viewBox="0 0 24 24" width="14" height="14"><path d="M12 2.5l2.95 6.4 7.05.7-5.3 4.85 1.55 6.95L12 17.9l-6.25 3.5L7.3 14.45 2 9.6l7.05-.7L12 2.5z" fill="#FFC107"/></svg>' +
+      '</span>' +
+      '<span class="evo-card-badge__avg">' + avg + '</span>' +
+      '<span class="evo-card-badge__divider">|</span>' +
+      '<span class="evo-card-badge__verified" aria-hidden="true">' +
+        '<svg viewBox="0 0 24 24" width="12" height="12">' +
+          '<path d="M12 1.5l2.6 2.1 3.3-.5.7 3.3 2.9 1.7-1.4 3.05 1.4 3.05-2.9 1.7-.7 3.3-3.3-.5L12 22.5l-2.6-2.1-3.3.5-.7-3.3L2.5 15.9l1.4-3.05L2.5 9.8l2.9-1.7.7-3.3 3.3.5L12 1.5z" fill="#1877F2"/>' +
+          '<path d="M9.55 14.7l-2.3-2.3 1.4-1.4 1 1 4.4-4.4 1.4 1.4-5.9 5.7z" fill="#fff"/>' +
+        '</svg>' +
+      '</span>' +
+      '<span class="evo-card-badge__count">(' + count + ' Reviews)</span>';
+  }
+
   function injectCardBadges() {
     if (cfg.showCardBadges === false) return;
 
-    // Find all product links anywhere on the page
+    // Build a map: card element -> handle (one badge per unique card)
+    var cardsByHandle = {};   // handle -> [card,card,...]
+    var seenCards = new WeakSet();
+
     var links = document.querySelectorAll('a[href*="/products/"]');
-    if (!links.length) return;
-
-    var processed = new WeakSet();
-    var byHandle = {};      // handle -> Array<card elements>
-
-    links.forEach(function (link) {
+    for (var i = 0; i < links.length; i++) {
+      var link = links[i];
       var m = (link.getAttribute("href") || "").match(/\/products\/([^/?#]+)/);
-      if (!m) return;
+      if (!m) continue;
       var handle = m[1];
-      // Skip if this is the current product's main badge already
-      if (isProductPage && handle === cfg.productHandle) return;
+      if (isProductPage && handle === cfg.productHandle) continue;
 
-      // Walk up to find the "card" container (limit to ~6 levels up)
-      var card = link;
-      for (var i = 0; i < 6 && card.parentElement; i++) {
-        var p = card.parentElement;
-        if (/product[_-]?card|card|grid__item|product-item|product__media|product-grid|collection-product|item/i.test(p.className || "")) {
-          card = p;
-          break;
-        }
-        card = p;
+      var card = findCardForLink(link);
+      if (!card) continue;
+      if (seenCards.has(card)) continue;
+      if (card.querySelector("[data-evo-card-badge]")) {
+        seenCards.add(card);
+        continue;
       }
-      if (processed.has(card)) return;
-      processed.add(card);
+      seenCards.add(card);
 
-      if (!byHandle[handle]) byHandle[handle] = [];
-      byHandle[handle].push(card);
-    });
+      if (!cardsByHandle[handle]) cardsByHandle[handle] = [];
+      cardsByHandle[handle].push(card);
+    }
 
-    // Fetch ratings for each unique handle
-    Object.keys(byHandle).forEach(function (handle) {
+    // One API call per unique handle
+    Object.keys(cardsByHandle).forEach(function (handle) {
       fetch(apiBase + "/api/reviews?shop=" + encodeURIComponent(cfg.shop) +
             "&productHandle=" + encodeURIComponent(handle) +
             "&page=1&limit=1")
         .then(function (r) { return r.json(); })
         .then(function (d) {
-          if (!d || !d.totalRatings || d.totalRatings === 0) return;
+          if (!d || !d.totalRatings) return;
           var avg = (d.average || 0).toFixed(1);
           var count = d.totalRatings;
-          byHandle[handle].forEach(function (card) {
+          cardsByHandle[handle].forEach(function (card) {
             if (card.querySelector("[data-evo-card-badge]")) return;
-            // Choose anchor: title-like element, otherwise the link itself
-            var titleEl =
-              card.querySelector("h2 a, h3 a, h4 a, .card__title, .card__heading, .product-card__title, .product-card-title, .product__title, .product-title, .grid__product-title, [class*='product-title'], [class*='card-title'], [class*='card__title']") ||
-              card.querySelector("h2, h3, h4");
+            var titleEl = findTitleInCard(card);
+            var ref = titleEl;
+            if (ref && ref.tagName === "A") ref = ref.parentElement || ref;
+            if (!ref) return; // No title — skip rather than placing in random spot
+
             var badge = document.createElement("div");
             badge.setAttribute("data-evo-card-badge", "");
             badge.className = "evo-card-badge";
-            badge.innerHTML =
-              '<span class="evo-card-badge__star" aria-hidden="true">' +
-                '<svg viewBox="0 0 24 24" width="13" height="13">' +
-                  '<path d="M12 2.5l2.95 6.4 7.05.7-5.3 4.85 1.55 6.95L12 17.9l-6.25 3.5L7.3 14.45 2 9.6l7.05-.7L12 2.5z" fill="#FFC107"/>' +
-                '</svg>' +
-              '</span>' +
-              '<span class="evo-card-badge__avg">' + avg + '</span>' +
-              '<span class="evo-card-badge__count">(' + count + ')</span>';
-
-            if (titleEl) {
-              // Insert right after the title element (or its closest block parent)
-              var ref = titleEl;
-              if (ref.tagName === "A") ref = ref.parentElement;
-              ref.parentNode.insertBefore(badge, ref.nextSibling);
-            } else {
-              card.appendChild(badge);
-            }
+            badge.innerHTML = buildCardBadgeHTML(avg, count);
+            ref.parentNode.insertBefore(badge, ref.nextSibling);
           });
         })
         .catch(function () { /* silent */ });
