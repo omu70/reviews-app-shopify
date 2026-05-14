@@ -22,7 +22,7 @@ export const loader = async ({ request }) => {
   const [reviewsRes, shopRes] = await Promise.all([
     supabaseAdmin
       .from("reviews")
-      .select("id, product_id, author_name, rating, content, status, source, image_urls, created_at")
+      .select("id, product_id, author_name, author_location, rating, content, status, source, image_urls, created_at")
       .eq("shop_domain", shop)
       .order("created_at", { ascending: false })
       .limit(500),
@@ -167,7 +167,10 @@ export default function AdminIndex() {
         <Text as="span" variant="bodySm" tone="subdued">{r.product_id}</Text>
       </IndexTable.Cell>
       <IndexTable.Cell>
-        <Text as="span" fontWeight="semibold">{r.author_name}</Text>
+        <BlockStack gap="050">
+          <Text as="span" fontWeight="semibold">{r.author_name}</Text>
+          {r.author_location ? <Text as="span" variant="bodySm" tone="subdued">{r.author_location}</Text> : null}
+        </BlockStack>
       </IndexTable.Cell>
       <IndexTable.Cell>
         <Text as="span">{"★".repeat(r.rating)}{"☆".repeat(5 - r.rating)}</Text>
@@ -242,7 +245,7 @@ export default function AdminIndex() {
                 image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
               >
                 <p>{reviews.length === 0
-                  ? "Import existing reviews from a CSV, or wait for customers to submit reviews from your storefront."
+                  ? "Import reviews from a CSV (use a Trustoo export directly), or wait for customers to submit reviews from your storefront."
                   : "Try removing a filter to see more reviews."}</p>
               </EmptyState>
             ) : (
