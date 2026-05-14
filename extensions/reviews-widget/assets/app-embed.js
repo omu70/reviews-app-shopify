@@ -29,6 +29,16 @@
     var target = findFirst(cfg.badgeTarget);
     if (!target) return;
 
+    // If target's parent is a flex/grid layout, jump up one level so the badge
+    // takes its own row instead of squeezing in next to the title.
+    var insertAfter = target;
+    try {
+      var parentStyle = window.getComputedStyle(target.parentNode || target);
+      if (parentStyle && (parentStyle.display === "flex" || parentStyle.display === "inline-flex" || parentStyle.display === "grid")) {
+        insertAfter = target.parentNode;
+      }
+    } catch (e) {}
+
     var wrap = document.createElement("div");
     wrap.setAttribute("data-evo-star-badge", "");
     wrap.className = "evo-star-badge";
@@ -49,7 +59,7 @@
         '<span data-evo-viewers>—</span> people are viewing this right now' +
       '</div>';
 
-    target.parentNode.insertBefore(wrap, target.nextSibling);
+    insertAfter.parentNode.insertBefore(wrap, insertAfter.nextSibling);
 
     // Live aggregate (prefer handle for matching imported reviews)
     fetch(apiBase + "/api/reviews?shop=" + encodeURIComponent(cfg.shop) +
