@@ -119,68 +119,90 @@ export const loader = async ({ request }) => {
   const to = from + limit - 1;
 
   // Helper that builds the base filter for either product- or store-scoped queries
-  function applyScope(query) {
-    query = query.eq("shop_domain", shop).eq("status", "approved");
-    if (storeOnly) {
-      query = query.is("product_id", null).is("product_handle", null);
-    } else if (productHandle && productId) {
-      // Match either column to either provided value (most permissive)
-      const ors = [
-        `product_handle.eq.${productHandle}`,
-        `product_id.eq.${productHandle}`,
-        `product_id.eq.${productId}`,
-      ].join(",");
-      query = query.or(ors);
-    } else if (productHandle) {
-      query = query.or(`product_handle.eq.${productHandle},product_id.eq.${productHandle}`);
-    } else {
-      query = query.eq("product_id", productId);
-    }
-    return query;
-  }
+  const SELECT_COLS = "id, title, author_name, author_initials, author_location, author_country, is_verified, is_featured, rating, content, image_urls, video_url, reply, reply_at, created_at";
 
-  const rowsP = applyScope(
-    supabaseAdmin
+  // Store-only mode: just store-wide reviews
+  if (storeOnly) {
+    const rowsRes = await supabaseAdmin
       .from("reviews")
-      .select(
-        "id, title, author_name, author_initials, author_location, author_country, is_verified, is_featured, rating, content, image_urls, video_url, reply, reply_at, created_at",
-        { count: "exact" }
-      )
-  )
+      .select(SELECT_COLS, { count: "exact" })
+      .eq("shop_domain", shop)
+      .eq("status", "approved")
+      .is("product_id", null)
+      .is("product_handle", null)
+      .order("is_featured", { ascending: false })
+      .order("created_at", { ascending: false })
+      .range(from, to);
+
+    const aggRes = await supabaseAdmin
+      .from("reviews")
+      .select("rating")
+      .eq("shop_domain", shop)
+      .eq("status", "approved")
+      .is("product_id", null)
+      .is("product_handle", null);
+
+    if (rowsRes.error || aggRes.error) {
+      return respond({ error: "DB error" }, { status: 500 });
+    }
+    const total = rowsRes.count ?? 0;
+    const ratings = aggRes.data || [];
+    const totalRatings = ratings.length;
+    const average = totalRatings === 0 ? 0
+      : Number((ratings.reduce((s, r) => s + r.rating, 0) / totalRatings).toFixed(1));
+    return respond({
+      reviews: rowsRes.data || [],
+      page, limit, total,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+      average, totalRatings,
+    });
+  }
+
+  // Product page mode: merge product-specific FIRST, then store-wide
+  const productKey = productHandle || productId;
+
+  // Fetch ALL product-specific reviews + ALL store-wide (we'll merge + paginate)
+  const productPromise = supabaseAdmin
+    .from("reviews")
+    .select(SELECT_COLS)
+    .eq("shop_domain", shop)
+    .eq("status", "approved")
+    .or(`product_handle.eq.${productKey},product_id.eq.${productKey}`)
     .order("is_featured", { ascending: false })
-    .order("created_at", { ascending: false })
-    .range(from, to);
+    .order("created_at", { ascending: false });
 
-  const aggP = applyScope(supabaseAdmin.from("reviews").select("rating"));
+  const storePromise = supabaseAdmin
+    .from("reviews")
+    .select(SELECT_COLS)
+    .eq("shop_domain", shop)
+    .eq("status", "approved")
+    .is("product_id", null)
+    .is("product_handle", null)
+    .order("is_featured", { ascending: false })
+    .order("created_at", { ascending: false });
 
-  const [rowsRes, aggRes] = await Promise.all([rowsP, aggP]);
-
-  if (rowsRes.error) {
-    console.error("[api.reviews GET rows]", rowsRes.error);
+  const [prodRes, storeRes] = await Promise.all([productPromise, storePromise]);
+  if (prodRes.error || storeRes.error) {
+    console.error("[api.reviews]", prodRes.error || storeRes.error);
     return respond({ error: "DB error" }, { status: 500 });
   }
-  if (aggRes.error) {
-    console.error("[api.reviews GET agg]", aggRes.error);
-    return respond({ error: "DB error" }, { status: 500 });
-  }
 
-  const total = rowsRes.count ?? 0;
-  const ratings = aggRes.data || [];
-  const totalRatings = ratings.length;
-  const average =
-    totalRatings === 0
-      ? 0
-      : Number(
-          (ratings.reduce((s, r) => s + r.rating, 0) / totalRatings).toFixed(1)
-        );
+  const productRows = prodRes.data || [];
+  const storeRows = storeRes.data || [];
+  // Combined: product-specific reviews first (top of feed), then store-wide
+  const combined = productRows.concat(storeRows);
+
+  const total = combined.length;
+  const totalRatings = total;
+  const average = total === 0 ? 0
+    : Number((combined.reduce((s, r) => s + r.rating, 0) / total).toFixed(1));
+
+  const paginated = combined.slice(from, to + 1);
 
   return respond({
-    reviews: rowsRes.data || [],
-    page,
-    limit,
-    total,
+    reviews: paginated,
+    page, limit, total,
     totalPages: Math.max(1, Math.ceil(total / limit)),
-    average,
-    totalRatings,
+    average, totalRatings,
   });
 };
