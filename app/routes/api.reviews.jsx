@@ -118,8 +118,16 @@ export const loader = async ({ request }) => {
     query = query.eq("shop_domain", shop).eq("status", "approved");
     if (storeOnly) {
       query = query.is("product_id", null).is("product_handle", null);
+    } else if (productHandle && productId) {
+      // Match either column to either provided value (most permissive)
+      const ors = [
+        `product_handle.eq.${productHandle}`,
+        `product_id.eq.${productHandle}`,
+        `product_id.eq.${productId}`,
+      ].join(",");
+      query = query.or(ors);
     } else if (productHandle) {
-      query = query.or(`product_id.eq.${productHandle},product_handle.eq.${productHandle}`);
+      query = query.or(`product_handle.eq.${productHandle},product_id.eq.${productHandle}`);
     } else {
       query = query.eq("product_id", productId);
     }

@@ -8,6 +8,8 @@
   if (!cfg || !cfg.productId || !cfg.apiBase) return;
 
   var apiBase = cfg.apiBase.replace(/\/$/, "");
+  // We prefer handle since CSV imports use handle; fall back to id.
+  var productKey = cfg.productHandle || cfg.productId;
 
   function findFirst(selectors) {
     if (!selectors) return null;
@@ -49,8 +51,9 @@
 
     target.parentNode.insertBefore(wrap, target.nextSibling);
 
-    // Live aggregate
+    // Live aggregate (prefer handle for matching imported reviews)
     fetch(apiBase + "/api/reviews?shop=" + encodeURIComponent(cfg.shop) +
+          "&productHandle=" + encodeURIComponent(productKey) +
           "&productId=" + encodeURIComponent(cfg.productId) + "&page=1&limit=1")
       .then(function (r) { return r.json(); })
       .then(function (d) {
@@ -83,6 +86,7 @@
     section.setAttribute("data-evo-review-widget", "");
     section.dataset.shop = cfg.shop;
     section.dataset.productId = cfg.productId;
+    section.dataset.productHandle = cfg.productHandle || "";
     section.dataset.api = apiBase;
     section.dataset.page = "1";
     section.dataset.limit = "12";
@@ -111,7 +115,8 @@
           '<button class="evo-rw__modal-close" type="button" data-evo-modal-close>&times;</button>' +
           '<h3>Write a review</h3>' +
           '<form data-evo-form>' +
-            '<label>Your name<input type="text" name="author_name" required maxlength="80"/></label>' +
+            '<label>Your full name<input type="text" name="author_name" required maxlength="80" placeholder="e.g. Aman Sharma"/></label>' +
+            '<label>Your location<input type="text" name="author_location" maxlength="80" placeholder="e.g. Mumbai, India"/></label>' +
             '<label>Rating<select name="rating" required>' +
               '<option value="5">5 — Excellent</option><option value="4">4 — Good</option>' +
               '<option value="3">3 — Okay</option><option value="2">2 — Poor</option>' +
@@ -138,6 +143,7 @@
     var apiBase = root.dataset.api;
     var shop = root.dataset.shop;
     var productId = root.dataset.productId;
+    var isStoreMode = root.dataset.store === "true";
     var limit = parseInt(root.dataset.limit || "12", 10);
 
     var grid = root.querySelector("[data-evo-rw-grid]");
@@ -160,6 +166,10 @@
       for (var i = 0; i < u.length; i++) { var n = Math.floor(s / u[i][1]); if (n >= 1) return n + " " + u[i][0] + (n > 1 ? "s" : "") + " ago"; }
       return s + " seconds ago";
     }
+    function fmtDate(iso) {
+      var d = new Date(iso); if (isNaN(d.getTime())) return "";
+      return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+    }
     function esc(s) { return String(s || "").replace(/[&<>"']/g, function (c) { return ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]; }); }
     function verified() {
       return '<span class="evo-rw__verified"><svg viewBox="0 0 24 24"><path d="M9 16.2l-3.5-3.5-1.4 1.4L9 19l11-11-1.4-1.4z" fill="#374151"/></svg>Verified purchase</span>';
@@ -173,17 +183,24 @@
     function renderCards(reviews) {
       if (!reviews.length) { grid.innerHTML = '<div class="evo-rw__empty">No reviews yet — be the first!</div>'; return; }
       grid.innerHTML = reviews.map(function (r) {
+        var locationLine = r.author_location
+          ? '<div class="evo-rw__location">📍 ' + esc(r.author_location) + '</div>'
+          : "";
         return '<article class="evo-rw__card">' +
           '<div class="evo-rw__card-top">' +
             '<div class="evo-rw__card-stars">' + starsHTML(r.rating) + '</div>' +
-            '<div class="evo-rw__card-date">' + timeAgo(r.created_at) + '</div>' +
+            '<div class="evo-rw__card-date" title="' + esc(fmtDate(r.created_at)) + '">' + timeAgo(r.created_at) + '</div>' +
           '</div>' +
           '<div class="evo-rw__card-author">' +
             '<div class="evo-rw__avatar">' + esc(r.author_initials || "??") + '</div>' +
-            '<div><div class="evo-rw__author-name">' + esc(r.author_name) + '</div>' +
-              (r.is_verified ? verified() : "") + '</div>' +
+            '<div>' +
+              '<div class="evo-rw__author-name">' + esc(r.author_name) + '</div>' +
+              (r.is_verified ? verified() : "") +
+              locationLine +
+            '</div>' +
           '</div>' +
           '<p class="evo-rw__card-content">' + esc(r.content) + '</p>' +
+          '<div class="evo-rw__card-footer">' + esc(fmtDate(r.created_at)) + '</div>' +
           imagesHTML(r.image_urls) +
         '</article>';
       }).join("");
@@ -198,7 +215,10 @@
     }
     function load(page) {
       grid.innerHTML = '<div class="evo-rw__empty">Loading reviews…</div>';
-      fetch(apiBase + "/api/reviews?shop=" + encodeURIComponent(shop) + "&productId=" + encodeURIComponent(productId) + "&page=" + page + "&limit=" + limit)
+      var qs = "shop=" + encodeURIComponent(shop) + "&page=" + page + "&limit=" + limit;
+      if (isStoreMode) qs += "&store=true";
+      else             qs += "&productId=" + encodeURIComponent(productId);
+      fetch(apiBase + "/api/reviews?" + qs)
         .then(function (r) { return r.json(); })
         .then(function (d) {
           if (d.error) { grid.innerHTML = '<div class="evo-rw__empty">Could not load reviews.</div>'; return; }
@@ -234,7 +254,9 @@
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           shop_domain: shop, product_id: productId,
-          author_name: fd.get("author_name"), rating: parseInt(fd.get("rating"), 10),
+          author_name: fd.get("author_name"),
+          author_location: fd.get("author_location") || null,
+          rating: parseInt(fd.get("rating"), 10),
           content: fd.get("content"), is_verified: false,
         }),
       })
